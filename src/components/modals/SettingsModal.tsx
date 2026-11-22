@@ -40,25 +40,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsTesting(true);
     setTestResult(null);
     try {
+      const result = await GoogleSheetService.testConnection(apiUrl);
       GoogleSheetService.setApiUrl(apiUrl);
-      if (!apiUrl.trim()) {
-        setTestResult({
-          success: true,
-          message: 'Saved in Local / Offline Mode (No remote Google Apps Script URL configured).',
-        });
-        setIsTesting(false);
-        return;
-      }
-
       await onRefreshData();
       setTestResult({
         success: true,
-        message: 'Connected successfully to Google Spreadsheet! Real-time sync is active.',
+        message: result.message,
       });
     } catch (err: any) {
       setTestResult({
         success: false,
-        message: `Failed to connect: ${err?.message || 'Check your Apps Script Web App URL and permissions (Who has access: Anyone).'}`
+        message: err?.message || 'Connection test failed. Check your Apps Script Web App URL and permissions (Who has access: Anyone).'
       });
     } finally {
       setIsTesting(false);

@@ -58,19 +58,34 @@ export const App: React.FC = () => {
 
   const isConnected = Boolean(GoogleSheetService.getCurrentApiUrl());
 
-  // Initial Load
+  // Initial Load and Auto-Sync
   useEffect(() => {
     const local = GoogleSheetService.loadInitialLocalData();
     setPurchases(local.purchases);
     setInflows(local.inflows);
     setDirectPayments(local.directPayments);
 
-    if (GoogleSheetService.getCurrentApiUrl()) {
-      handleSync();
-    }
+    // Initial fetch (fetches live Google Sheet data via Apps Script or public CSV)
+    handleSync(true);
+
+    // Auto-sync polling every 45 seconds
+    const interval = setInterval(() => {
+      handleSync(true);
+    }, 45000);
+
+    // Auto-sync when user switches back to this tab
+    const handleFocus = () => {
+      handleSync(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
-  const handleSync = async () => {
+  const handleSync = async (silent = false) => {
     setIsSyncing(true);
     try {
       const data = await GoogleSheetService.fetchRemoteData();
@@ -78,10 +93,14 @@ export const App: React.FC = () => {
         setPurchases(data.purchases);
         setInflows(data.inflows);
         setDirectPayments(data.directPayments);
-        showToast('Synced with Google Spreadsheet successfully!');
+        if (!silent) {
+          showToast('Synced with Google Spreadsheet successfully!');
+        }
       }
     } catch (err: any) {
-      showToast(err?.message || 'Sync failed, using offline data', 'error');
+      if (!silent) {
+        showToast(err?.message || 'Sync failed, using offline data', 'error');
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -121,8 +140,16 @@ export const App: React.FC = () => {
           : p
       );
       persistChanges(updated, inflows, directPayments);
-      showToast('Purchase updated successfully');
-      GoogleSheetService.updatePurchase(editingPurchase.rowIndex, { ...data, date: sheetDate }).catch(console.error);
+      showToast('Updating purchase in Sheet...');
+      const res = await GoogleSheetService.updatePurchase(editingPurchase.rowIndex, {
+        ...data,
+        date: sheetDate,
+      });
+      if (res.success) {
+        showToast('Purchase updated and synced to Sheet');
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     } else {
       const newRowIndex = Math.max(4, ...purchases.map((p) => p.rowIndex + 1));
       const newRecord: PurchaseExpense = {
@@ -143,18 +170,29 @@ export const App: React.FC = () => {
         notes: data.notes || '',
       };
       persistChanges([newRecord, ...purchases], inflows, directPayments);
-      showToast(`Purchase #${newRecord.receiptNo} recorded`);
       confetti({ particleCount: 40, spread: 60, origin: { y: 0.85 } });
-      GoogleSheetService.addPurchase(newRecord).catch(console.error);
+      showToast(`Saving Purchase #${newRecord.receiptNo}...`);
+
+      const res = await GoogleSheetService.addPurchase(newRecord);
+      if (res.success) {
+        showToast(`Purchase #${newRecord.receiptNo} saved and synced to Sheet!`);
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     }
   };
 
-  const handleDeletePurchase = (purchase: PurchaseExpense) => {
+  const handleDeletePurchase = async (purchase: PurchaseExpense) => {
     if (window.confirm(`Delete purchase "${purchase.component}" (#${purchase.receiptNo})?`)) {
       const filtered = purchases.filter((p) => p.id !== purchase.id);
       persistChanges(filtered, inflows, directPayments);
-      showToast('Purchase record deleted');
-      GoogleSheetService.deletePurchase(purchase.rowIndex).catch(console.error);
+      showToast('Deleting from Sheet...');
+      const res = await GoogleSheetService.deletePurchase(purchase.rowIndex);
+      if (res.success) {
+        showToast('Purchase deleted from Sheet');
+      } else {
+        showToast(res.error || 'Deleted locally, but Sheet sync failed', 'error');
+      }
     }
   };
 
@@ -166,8 +204,16 @@ export const App: React.FC = () => {
         inf.id === editingInflow.id ? ({ ...inf, ...data, date: sheetDate } as CapitalInflow) : inf
       );
       persistChanges(purchases, updated, directPayments);
-      showToast('Capital Inflow updated');
-      GoogleSheetService.updateInflow(editingInflow.rowIndex, { ...data, date: sheetDate }).catch(console.error);
+      showToast('Updating inflow in Sheet...');
+      const res = await GoogleSheetService.updateInflow(editingInflow.rowIndex, {
+        ...data,
+        date: sheetDate,
+      });
+      if (res.success) {
+        showToast('Capital Inflow updated in Sheet');
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     } else {
       const newRowIndex = Math.max(4, ...inflows.map((i) => i.rowIndex + 1));
       const newRecord: CapitalInflow = {
@@ -183,18 +229,29 @@ export const App: React.FC = () => {
         notes: data.notes || '',
       };
       persistChanges(purchases, [newRecord, ...inflows], directPayments);
-      showToast(`Capital Inflow of ${data.amount} BDT recorded`);
       confetti({ particleCount: 50, spread: 70, origin: { y: 0.85 } });
-      GoogleSheetService.addInflow(newRecord).catch(console.error);
+      showToast(`Saving Inflow of ${data.amount} BDT...`);
+
+      const res = await GoogleSheetService.addInflow(newRecord);
+      if (res.success) {
+        showToast(`Capital Inflow of ${data.amount} BDT synced to Sheet!`);
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     }
   };
 
-  const handleDeleteInflow = (inflow: CapitalInflow) => {
+  const handleDeleteInflow = async (inflow: CapitalInflow) => {
     if (window.confirm(`Delete inflow of ${inflow.amount} BDT from ${inflow.contributor}?`)) {
       const filtered = inflows.filter((inf) => inf.id !== inflow.id);
       persistChanges(purchases, filtered, directPayments);
-      showToast('Capital Inflow record deleted');
-      GoogleSheetService.deleteInflow(inflow.rowIndex).catch(console.error);
+      showToast('Deleting inflow from Sheet...');
+      const res = await GoogleSheetService.deleteInflow(inflow.rowIndex);
+      if (res.success) {
+        showToast('Capital Inflow deleted from Sheet');
+      } else {
+        showToast(res.error || 'Deleted locally, but Sheet sync failed', 'error');
+      }
     }
   };
 
@@ -206,8 +263,16 @@ export const App: React.FC = () => {
         dp.id === editingDirectPayment.id ? ({ ...dp, ...data, date: sheetDate } as DirectPayment) : dp
       );
       persistChanges(purchases, inflows, updated);
-      showToast('Direct payment updated');
-      GoogleSheetService.updateDirectPayment(editingDirectPayment.rowIndex, { ...data, date: sheetDate }).catch(console.error);
+      showToast('Updating payment in Sheet...');
+      const res = await GoogleSheetService.updateDirectPayment(editingDirectPayment.rowIndex, {
+        ...data,
+        date: sheetDate,
+      });
+      if (res.success) {
+        showToast('Direct payment updated in Sheet');
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     } else {
       const newRowIndex = Math.max(2, ...directPayments.map((dp) => dp.rowIndex + 1));
       const newRecord: DirectPayment = {
@@ -224,18 +289,29 @@ export const App: React.FC = () => {
         receiptLink: data.receiptLink || '',
       };
       persistChanges(purchases, inflows, [newRecord, ...directPayments]);
-      showToast(`Payment of ${data.amount} BDT to ${newRecord.paidTo} recorded`);
       confetti({ particleCount: 50, spread: 70, origin: { y: 0.85 } });
-      GoogleSheetService.addDirectPayment(newRecord).catch(console.error);
+      showToast(`Saving Payment to ${newRecord.paidTo}...`);
+
+      const res = await GoogleSheetService.addDirectPayment(newRecord);
+      if (res.success) {
+        showToast(`Payment of ${data.amount} BDT to ${newRecord.paidTo} synced to Sheet!`);
+      } else {
+        showToast(res.error || 'Saved locally, but Sheet sync failed', 'error');
+      }
     }
   };
 
-  const handleDeleteDirectPayment = (dp: DirectPayment) => {
+  const handleDeleteDirectPayment = async (dp: DirectPayment) => {
     if (window.confirm(`Delete payment of ${dp.amount} BDT to ${dp.paidTo}?`)) {
       const filtered = directPayments.filter((p) => p.id !== dp.id);
       persistChanges(purchases, inflows, filtered);
-      showToast('Payment record deleted');
-      GoogleSheetService.deleteDirectPayment(dp.rowIndex).catch(console.error);
+      showToast('Deleting payment from Sheet...');
+      const res = await GoogleSheetService.deleteDirectPayment(dp.rowIndex);
+      if (res.success) {
+        showToast('Payment record deleted from Sheet');
+      } else {
+        showToast(res.error || 'Deleted locally, but Sheet sync failed', 'error');
+      }
     }
   };
 

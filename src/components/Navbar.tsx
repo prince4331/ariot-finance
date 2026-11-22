@@ -37,9 +37,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
                   ARIOT Finance
                 </span>
-                <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-full">
-                  Live Hub
-                </span>
+                {isConnected ? (
+                  <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    <span>Live Sync</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={onOpenSettings}
+                    title="Click to connect Google Apps Script Web App URL"
+                    className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-full flex items-center gap-1 transition-colors"
+                  >
+                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                    <span>Local Mode</span>
+                  </button>
+                )}
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
                 Real-Time Sheet Sync & Cashflow Manager

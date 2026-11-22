@@ -16,11 +16,21 @@
  */
 
 var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var SPREADSHEET_ID = '14gJNHpGP0a0iuN75FcnkplXUkbHSykc3u-6J4Qcgp7I';
+
+function getSpreadsheet() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) return ss;
+  } catch (e) {}
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
 
 function doGet(e) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var action = e && e.parameter ? e.parameter.action : 'getData';
+    var ss = getSpreadsheet();
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || 'getData';
 
     if (action === 'getData') {
       return respondJson({
@@ -29,10 +39,30 @@ function doGet(e) {
       });
     }
 
+    if (action === 'ping') {
+      return respondJson({
+        status: "ok",
+        spreadsheetName: ss.getName(),
+        message: "ARIOT Finance API is online"
+      });
+    }
+
+    // Support GET requests with actions for robust cross-origin calls
+    var payloadData = null;
+    if (params.data) {
+      try {
+        payloadData = JSON.parse(params.data);
+      } catch (err) {
+        payloadData = params.data;
+      }
+    }
+    var rowIndex = params.rowIndex ? parseInt(params.rowIndex, 10) : undefined;
+    var result = handleAction(ss, action, { data: payloadData, rowIndex: rowIndex });
+
     return respondJson({
-      status: "ok",
-      spreadsheetName: ss.getName(),
-      message: "ARIOT Finance API is online"
+      success: true,
+      result: result,
+      data: getAllData(ss)
     });
   } catch (err) {
     return respondJson({
@@ -60,44 +90,9 @@ function doPost(e) {
       payload = e.parameter || {};
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSpreadsheet();
     var action = payload.action;
-    var result = {};
-
-    switch (action) {
-      case 'addPurchase':
-        result = addPurchase(ss, payload.data);
-        break;
-      case 'updatePurchase':
-        result = updatePurchase(ss, payload.rowIndex, payload.data);
-        break;
-      case 'deletePurchase':
-        result = deleteRow(ss, 'Purchases & Expenses', payload.rowIndex);
-        break;
-
-      case 'addInflow':
-        result = addInflow(ss, payload.data);
-        break;
-      case 'updateInflow':
-        result = updateInflow(ss, payload.rowIndex, payload.data);
-        break;
-      case 'deleteInflow':
-        result = deleteRow(ss, 'Capital Inflow', payload.rowIndex);
-        break;
-
-      case 'addDirectPayment':
-        result = addDirectPayment(ss, payload.data);
-        break;
-      case 'updateDirectPayment':
-        result = updateDirectPayment(ss, payload.rowIndex, payload.data);
-        break;
-      case 'deleteDirectPayment':
-        result = deleteRow(ss, 'Direct Payments', payload.rowIndex);
-        break;
-
-      default:
-        throw new Error("Unknown action: " + action);
-    }
+    var result = handleAction(ss, action, payload);
 
     return respondJson({
       success: true,
@@ -110,6 +105,45 @@ function doPost(e) {
       error: err.toString()
     });
   }
+}
+
+function handleAction(ss, action, payload) {
+  var result = {};
+  switch (action) {
+    case 'addPurchase':
+      result = addPurchase(ss, payload.data);
+      break;
+    case 'updatePurchase':
+      result = updatePurchase(ss, payload.rowIndex, payload.data);
+      break;
+    case 'deletePurchase':
+      result = deleteRow(ss, 'Purchases & Expenses', payload.rowIndex);
+      break;
+
+    case 'addInflow':
+      result = addInflow(ss, payload.data);
+      break;
+    case 'updateInflow':
+      result = updateInflow(ss, payload.rowIndex, payload.data);
+      break;
+    case 'deleteInflow':
+      result = deleteRow(ss, 'Capital Inflow', payload.rowIndex);
+      break;
+
+    case 'addDirectPayment':
+      result = addDirectPayment(ss, payload.data);
+      break;
+    case 'updateDirectPayment':
+      result = updateDirectPayment(ss, payload.rowIndex, payload.data);
+      break;
+    case 'deleteDirectPayment':
+      result = deleteRow(ss, 'Direct Payments', payload.rowIndex);
+      break;
+
+    default:
+      throw new Error("Unknown action: " + action);
+  }
+  return result;
 }
 
 function respondJson(data) {
