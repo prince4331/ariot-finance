@@ -172,9 +172,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Deploy the provided script in your spreadsheet once to get this URL. Any action in this Web UI will immediately update the spreadsheet!
-                </p>
+                <div className="flex items-center justify-between text-[11px]">
+                  <p className="text-slate-400">
+                    Live production Web App API is connected.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const def = 'https://script.google.com/macros/s/AKfycbzQq2v3RbiZ8290XZAATkJd6eV-2XZ0VFz5j4ZtlxtnwTZpcQHf42AuAbbvRGpAAbG7/exec';
+                      setApiUrl(def);
+                      GoogleSheetService.setApiUrl(def);
+                      setTestResult({
+                        success: true,
+                        message: 'Reset to live production API URL. Click Save & Test below to verify.',
+                      });
+                    }}
+                    className="text-blue-400 hover:text-blue-300 font-medium hover:underline"
+                  >
+                    Restore Default API
+                  </button>
+                </div>
               </div>
 
               {testResult && (

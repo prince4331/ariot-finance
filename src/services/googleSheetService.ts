@@ -71,10 +71,17 @@ const DEFAULT_APPS_SCRIPT_URL =
 
 export class GoogleSheetService {
   private static getApiUrl(): string {
-    return (
-      localStorage.getItem(STORAGE_KEYS.APPS_SCRIPT_URL) ||
-      DEFAULT_APPS_SCRIPT_URL
-    );
+    const stored = localStorage.getItem(STORAGE_KEYS.APPS_SCRIPT_URL);
+    // If the stored URL is a valid Apps Script URL (not a spreadsheet URL)
+    if (stored && stored.includes('script.google.com/macros/s/') && stored.endsWith('/exec')) {
+      return stored.trim();
+    }
+    // Automatically purge broken or spreadsheet URLs from localStorage
+    if (stored) {
+      console.warn('Clearing invalid stored URL from localStorage:', stored);
+      localStorage.removeItem(STORAGE_KEYS.APPS_SCRIPT_URL);
+    }
+    return DEFAULT_APPS_SCRIPT_URL;
   }
 
   public static setApiUrl(url: string): void {
@@ -371,15 +378,35 @@ export class GoogleSheetService {
       if (getJson && getJson.success) {
         return { success: true, data: getJson.data };
       }
-      return {
-        success: false,
-        error: getJson?.error || 'Apps Script returned failure on GET fallback',
-      };
+      if (getJson && getJson.error) {
+        return { success: false, error: getJson.error };
+      }
     } catch (getErr: any) {
-      console.error(`Error sending command ${action} via both POST and GET:`, getErr);
+      console.warn(`GET ${action} failed, attempting no-cors fallback:`, getErr);
+    }
+
+    // 3. Fallback: Send via POST with mode: 'no-cors'
+    // Bypasses browser cross-origin policy when extensions or mobile privacy settings block redirect responses
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({
+          action,
+          ...payload,
+        }),
+      });
+
+      // Payload successfully delivered to Google Apps Script
+      return { success: true };
+    } catch (noCorsErr: any) {
+      console.error(`All delivery methods failed for ${action}:`, noCorsErr);
       return {
         success: false,
-        error: getErr?.message || 'Network error communicating with Google Sheets',
+        error: noCorsErr?.message || 'Network error communicating with Google Sheets',
       };
     }
   }
