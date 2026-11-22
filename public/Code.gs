@@ -241,10 +241,23 @@ function getPurchases(ss) {
   return records;
 }
 
+function findNextAvailableRow(sheet, startRow, checkCol) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return startRow;
+
+  var colValues = sheet.getRange(startRow, checkCol, lastRow - startRow + 1, 1).getValues();
+  for (var i = 0; i < colValues.length; i++) {
+    var val = colValues[i][0];
+    if (val === "" || val === null || val === undefined) {
+      return startRow + i;
+    }
+  }
+  return lastRow + 1;
+}
+
 function addPurchase(ss, data) {
   var sheet = ss.getSheetByName('Purchases & Expenses');
-  var lastRow = sheet.getLastRow();
-  var nextRow = Math.max(lastRow + 1, 4);
+  var nextRow = findNextAvailableRow(sheet, 4, 6); // Check Component column
 
   var receiptNo = data.receiptNo;
   if (!receiptNo) {
@@ -342,8 +355,7 @@ function getInflows(ss) {
 
 function addInflow(ss, data) {
   var sheet = ss.getSheetByName('Capital Inflow');
-  var lastRow = sheet.getLastRow();
-  var nextRow = Math.max(lastRow + 1, 4);
+  var nextRow = findNextAvailableRow(sheet, 4, 2); // Check Contributor column
 
   var dateObj = parseInputDate(data.date);
 
@@ -421,8 +433,7 @@ function getDirectPayments(ss) {
 
 function addDirectPayment(ss, data) {
   var sheet = ss.getSheetByName('Direct Payments');
-  var lastRow = sheet.getLastRow();
-  var nextRow = Math.max(lastRow + 1, 2);
+  var nextRow = findNextAvailableRow(sheet, 2, 2); // Check Paid By column
 
   var dateObj = parseInputDate(data.date);
 
